@@ -96,11 +96,14 @@ jobs:
           del filebin.zip
           ren *.zip win.zip
           tar -xf win.zip
-          echo f | xcopy /f /y .\files\converter_multi ..\files\converter_multi
-          echo f | xcopy /f /y .\files\converter_windows ..\files\converter_windows
-          echo f | xcopy /f /y ConvertConfig.ini ..\ConvertConfig.ini
-          echo f | xcopy /f /y CustomAppsList.txt ..\CustomAppsList.txt
-          echo f | xcopy /f /y uup_download_windows.cmd ..\start.cmd
+          :: Copy entire files/ directory (converter_multi, converter_windows, get_aria2.ps1, etc.)
+          if exist files (
+            xcopy /e /i /y files ..\files\
+          )
+          :: Copy root-level UUPDump scripts and configs
+          copy /y uup_download_windows.cmd ..\start.cmd
+          if exist ConvertConfig.ini copy /y ConvertConfig.ini ..\ConvertConfig.ini
+          if exist CustomAppsList.txt copy /y CustomAppsList.txt ..\CustomAppsList.txt
           cd ..
 
       # ---------------------------------------------------------------
