@@ -1,0 +1,333 @@
+# =============================================================================
+# UUP → Tiny11 Builder
+# =============================================================================
+# Combines:
+#   1. UUPDumpOnGitHub (https://github.com/Enderxity/UUPDumpOnGitHub)
+#      - Downloads a UUPDump zip (via Filebin code) and builds a base Windows ISO
+#   2. tiny11-automated (https://github.com/kelexine/tiny11-automated)
+#      - Trims the ISO with one of three variants (Standard / Core / Nano)
+# =============================================================================
+
+name: UUP → Tiny11 Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      filebin_code:
+        description: 'Filebin code of the uploaded UUPDump zip archive'
+        required: true
+        type: string
+      tiny11_variant:
+        description: 'Tiny11 trimming variant'
+        required: true
+        default: 'core'
+        type: choice
+        options:
+          - 'standard'
+          - 'core'
+          - 'nano'
+      image_index:
+        description: 'Windows image index (1=Home, 4=Education, 6=Pro)'
+        required: true
+        default: '6'
+        type: choice
+        options:
+          - '1'
+          - '4'
+          - '6'
+      enable_dotnet35:
+        description: 'Enable .NET Framework 3.5 (Core variant only)'
+        required: false
+        default: false
+        type: boolean
+      skip_cleanup:
+        description: 'Keep temp files (debug)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  POWERSHELL_TELEMETRY_OPTOUT: '1'
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 480
+    permissions:
+      contents: write
+
+    steps:
+      # ---------------------------------------------------------------
+      # 1. Checkout
+      # ---------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ---------------------------------------------------------------
+      # 2. Display system info
+      # ---------------------------------------------------------------
+      - name: System information
+        shell: powershell
+        run: |
+          Write-Output "=== System Information ==="
+          Write-Output "OS: $(Get-CimInstance Win32_OperatingSystem | Select-Object -ExpandProperty Caption)"
+          Write-Output "PowerShell: $($PSVersionTable.PSVersion)"
+          Write-Output "Architecture: $env:PROCESSOR_ARCHITECTURE"
+
+          $disk = Get-PSDrive C
+          $freeGB = [math]::Round($disk.Free / 1GB, 2)
+          Write-Output "Disk C: ${freeGB}GB free"
+          if ($freeGB -lt 40) {
+            Write-Warning "Low disk space: ${freeGB}GB (40GB+ recommended)"
+          }
+
+      # ---------------------------------------------------------------
+      # 3. Download & extract UUPDump zip from Filebin
+      # ---------------------------------------------------------------
+      - name: Download and extract UUPDump archive
+        shell: cmd
+        run: |
+          mkdir win
+          cd win
+          curl -o filebin.zip https://filebin.net/archive/${{ inputs.filebin_code }}/zip
+          tar -xf filebin.zip
+          del filebin.zip
+          ren *.zip win.zip
+          tar -xf win.zip
+          echo f | xcopy /f /y .\files\converter_multi ..\files\converter_multi
+          echo f | xcopy /f /y .\files\converter_windows ..\files\converter_windows
+          echo f | xcopy /f /y ConvertConfig.ini ..\ConvertConfig.ini
+          echo f | xcopy /f /y CustomAppsList.txt ..\CustomAppsList.txt
+          echo f | xcopy /f /y uup_download_windows.cmd ..\start.cmd
+          cd ..
+
+      # ---------------------------------------------------------------
+      # 4. Build the base Windows ISO from UUP files
+      # ---------------------------------------------------------------
+      - name: Build Windows ISO from UUP files
+        run: start.cmd
+        shell: cmd
+
+      # ---------------------------------------------------------------
+      # 5. Find & mount the generated ISO
+      # ---------------------------------------------------------------
+      - name: Mount generated ISO
+        shell: powershell
+        run: |
+          # Locate the ISO produced by UUPDump
+          $iso = Get-ChildItem -Path $PWD -Filter "*.iso" | Select-Object -First 1
+          if (-not $iso) {
+            Write-Error "No ISO file found after UUP build"
+            Get-ChildItem -Path $PWD | Format-Table Name, Length, LastWriteTime
+            exit 1
+          }
+          $isoPath = $iso.FullName
+          Write-Output "Found ISO: $isoPath ($([math]::Round((Get-Item $isoPath).Length/1GB,2)) GB)"
+          Add-Content -Path $env:GITHUB_ENV -Value "SOURCE_ISO_PATH=$isoPath"
+
+          # Mount
+          $mount = Mount-DiskImage -ImagePath $isoPath -PassThru -StorageType ISO
+
+          # Wait for drive letter (up to 60s)
+          $driveLetter = $null
+          for ($i = 0; $i -lt 12; $i++) {
+            Start-Sleep -Seconds 5
+            try {
+              $driveInfo = Get-Volume -DiskImage $mount -ErrorAction SilentlyContinue
+              if ($driveInfo -and $driveInfo.DriveLetter) {
+                $driveLetter = $driveInfo.DriveLetter
+                break
+              }
+            } catch { }
+          }
+          if (-not $driveLetter) {
+            # Fallback: WMI
+            $drive = Get-CimInstance Win32_LogicalDisk |
+              Where-Object { $_.DriveType -eq 5 -and $_.DeviceID -ne $null } |
+              Select-Object -First 1
+            if ($drive) {
+              $driveLetter = $drive.DeviceID.TrimEnd(':')
+              Write-Output "Drive letter via WMI: $driveLetter"
+            } else {
+              Write-Error "Could not determine mount drive letter"
+              exit 1
+            }
+          }
+
+          Write-Output "ISO mounted at drive: ${driveLetter}:"
+          Add-Content -Path $env:GITHUB_ENV -Value "ISO_DRIVE=$driveLetter"
+
+      # ---------------------------------------------------------------
+      # 6. Copy autounattend.xml to scripts/ (tiny11 scripts look for it
+      #    via $PSScriptRoot\autounattend.xml)
+      # ---------------------------------------------------------------
+      - name: Stage autounattend.xml
+        shell: powershell
+        run: |
+          if (Test-Path "autounattend.xml") {
+            Copy-Item "autounattend.xml" "scripts\autounattend.xml" -Force
+            Write-Output "autounattend.xml copied to scripts/"
+          } else {
+            Write-Warning "autounattend.xml not found in root!"
+          }
+
+      # ---------------------------------------------------------------
+      # 7. Run the selected tiny11 variant
+      # ---------------------------------------------------------------
+      - name: Run Tiny11 variant
+        shell: powershell
+        run: |
+          Set-ExecutionPolicy Bypass -Scope Process -Force
+
+          $variant     = "${{ inputs.tiny11_variant }}"
+          $driveLetter = "$env:ISO_DRIVE"
+          $index       = [int]"${{ inputs.image_index }}"
+          $skipCleanup = "${{ inputs.skip_cleanup }}" -eq "true"
+          $enableDot35 = "${{ inputs.enable_dotnet35 }}" -eq "true"
+
+          # Map variant → script
+          $scriptMap = @{
+            "standard" = ".\scripts\tiny11maker-headless.ps1"
+            "core"     = ".\scripts\tiny11coremaker-headless.ps1"
+            "nano"     = ".\scripts\nano11builder-headless.ps1"
+          }
+          $scriptPath = $scriptMap[$variant]
+          if (-not $scriptPath) {
+            Write-Error "Unknown variant: $variant"
+            exit 1
+          }
+          if (-not (Test-Path $scriptPath)) {
+            Write-Error "Script not found: $scriptPath"
+            exit 1
+          }
+
+          Write-Output "========================================"
+          Write-Output "  Variant:     $variant"
+          Write-Output "  Script:      $scriptPath"
+          Write-Output "  ISO Drive:   $driveLetter"
+          Write-Output "  Image Index: $index"
+          Write-Output "  SkipCleanup: $skipCleanup"
+          Write-Output "========================================"
+
+          $startTime = Get-Date
+
+          # Build splatting parameters
+          $params = @{
+            ISO   = $driveLetter
+            INDEX = $index
+          }
+          if ($skipCleanup) {
+            $params.SkipCleanup = $true
+          }
+          if ($enableDot35 -and $variant -eq "core") {
+            $params.ENABLE_DOTNET35 = $true
+          }
+
+          & $scriptPath @params
+
+          $elapsed = (Get-Date) - $startTime
+          Write-Output "Tiny11 $variant build completed in $($elapsed.TotalMinutes.ToString('F2')) minutes"
+
+      # ---------------------------------------------------------------
+      # 8. Rename and expose the output ISO
+      # ---------------------------------------------------------------
+      - name: Prepare output artifact
+        shell: powershell
+        run: |
+          $variant = "${{ inputs.tiny11_variant }}"
+
+          $outputNames = @{
+            "standard" = "tiny11.iso"
+            "core"     = "tiny11-core.iso"
+            "nano"     = "nano11.iso"
+          }
+          $sourceName = "scripts\$($outputNames[$variant])"
+          $sourcePath = Join-Path $PWD $sourceName
+
+          if (-not (Test-Path $sourcePath)) {
+            Write-Error "Output ISO not found: $sourcePath"
+            Write-Output "--- Available ISO files ---"
+            Get-ChildItem -Path $PWD -Recurse -Filter "*.iso" |
+              Format-Table FullName, Length, LastWriteTime -AutoSize
+            exit 1
+          }
+
+          $date    = Get-Date -Format 'yyyyMMdd-HHmmss'
+          $version = "UUPDump"
+          $finalIso = "Tiny11-$variant-$version-$date.iso"
+
+          Copy-Item -Path $sourcePath -Destination $finalIso -Force
+          $sizeGB = [math]::Round((Get-Item $finalIso).Length / 1GB, 2)
+
+          Write-Output "Output ISO: $finalIso (${sizeGB} GB)"
+          Add-Content -Path $env:GITHUB_ENV -Value "OUTPUT_ISO=$finalIso"
+          Add-Content -Path $env:GITHUB_ENV -Value "ISO_SIZE_GB=$sizeGB"
+
+          # Checksums
+          $sha256 = (Get-FileHash -Path $finalIso -Algorithm SHA256).Hash
+          $md5    = (Get-FileHash -Path $finalIso -Algorithm MD5).Hash
+          "$sha256  $finalIso" | Out-File -FilePath "$finalIso.sha256" -Encoding ASCII
+          "$md5  $finalIso"    | Out-File -FilePath "$finalIso.md5" -Encoding ASCII
+
+          Add-Content -Path $env:GITHUB_ENV -Value "ISO_SHA256=$sha256"
+          Add-Content -Path $env:GITHUB_ENV -Value "ISO_MD5=$md5"
+
+          Write-Output "SHA256: $sha256"
+          Write-Output "MD5:    $md5"
+
+      # ---------------------------------------------------------------
+      # 9. Unmount source ISO (cleanup)
+      # ---------------------------------------------------------------
+      - name: Cleanup - unmount source ISO
+        if: always()
+        shell: powershell
+        run: |
+          $isoPath = "$env:SOURCE_ISO_PATH"
+          if (Test-Path $isoPath) {
+            Get-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContinue |
+              Dismount-DiskImage -ErrorAction SilentlyContinue
+            Write-Output "Source ISO unmounted"
+          }
+
+      # ---------------------------------------------------------------
+      # 10. Upload ISO as GitHub Actions artifact
+      # ---------------------------------------------------------------
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.OUTPUT_ISO }}
+          path: |
+            ${{ env.OUTPUT_ISO }}
+            ${{ env.OUTPUT_ISO }}.sha256
+            ${{ env.OUTPUT_ISO }}.md5
+          retention-days: 7
+          compression-level: 0
+
+      # ---------------------------------------------------------------
+      # 11. Workflow summary
+      # ---------------------------------------------------------------
+      - name: Build summary
+        shell: powershell
+        run: |
+          $summary = @"
+          # ✅ UUP → Tiny11 Build Completed
+
+          | Item | Value |
+          |------|-------|
+          | **Variant** | ${{ inputs.tiny11_variant }} |
+          | **Image Index** | ${{ inputs.image_index }} |
+          | **ISO** | ${{ env.OUTPUT_ISO }} |
+          | **Size** | ${{ env.ISO_SIZE_GB }} GB |
+          | **SHA256** | `${{ env.ISO_SHA256 }}` |
+          | **MD5** | `${{ env.ISO_MD5 }}` |
+
+          ## ⚠️ Important Notes
+
+          - **Administrator** account is enabled, password: `123456`
+          - OOBE is fully skipped — boots directly to desktop
+          - All system requirement checks bypassed (TPM, CPU, RAM, SecureBoot)
+          - Download the ISO from the **Artifacts** section above
+          "@
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary

@@ -1,0 +1,9 @@
+*.iso
+*.wim
+*.esd
+*.bin
+*.log
+__pycache__/
+*.pyc
+.win/
+scratchdir/
