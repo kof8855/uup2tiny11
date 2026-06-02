@@ -27,9 +27,9 @@ on:
           - 'core'
           - 'nano'
       image_index:
-        description: 'Windows image index (1=Home, 4=Education, 6=Pro)'
+        description: 'Image index (1=auto for single-edition UUPDump ISOs) / 镜像索引（单版本 UUPDump ISO 始终填 1）'
         required: true
-        default: '6'
+        default: '1'
         type: choice
         options:
           - '1'

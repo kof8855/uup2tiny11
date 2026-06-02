@@ -25,19 +25,48 @@
 
 点击 GitHub 页面右上角的 **Fork** 按钮，把本仓库复制到你的账号下。
 
-### 第二步：获取 UUPDump Zip
+### 第二步：在 UUPDump 选择 SKU 版本（重要！）
 
-1. 打开 [UUPDump](https://uupdump.net/)
-2. 选择你想要的 Windows 版本和语言
-3. 在下载页面，选择 **"Download and convert to ISO"** 选项（确保选择包含 `ConvertConfig.ini` 的 ZIP 包）
-4. 下载生成的 ZIP 文件到本地
+> ⚠️ **这一步是关键，Index 的设置取决于你选择了几个 SKU（版本）。**
 
-> ⚠️ 注意：UUPDump 生成的 ZIP 文件里必须包含 `uup_download_windows.cmd`、`ConvertConfig.ini`、`files/converter_multi/` 等文件。标准 UUPDump 下载包都符合这个结构。
+在 [UUPDump](https://uupdump.net/) 选择好语言和版本后，进入 **选择 SKU / Select SKU** 页面。
+此处**强烈建议只勾选 1 个版本**（多选会导致 ISO 内有多个 Index，增大体积）。
+
+**推荐选项（单选 1 个即可）：**
+
+| 版本（显示名称） | UUPDump 中的名称 | 用途建议 |
+|---|---|---|
+| ✅ **Windows 11 专业版** | Professional | 适合大多数场景，推荐 |
+| ⬜ Windows 11 家庭中文版 | CoreCountrySpecific | 预装在中文品牌机 |
+| ⬜ Windows 11 家庭版 | Core | 基础家庭用户 |
+| ⬜ Windows 11 协同版 | ProfessionalWorkstation | 高端工作站 |
+
+> 💡 **只勾选 1 个版本** → 生成的 ISO 中只有一个 Index=1
+> 此时工作流的 `image_index` 参数始终填 **`1`** 即可。
+
+如果选择了多个版本，ISO 中的 Index 编号规则如下（以英文版为例，中文版名类似）：
+
+| Index | 版本 |
+|-------|------|
+| 1 | Windows 11 Home / Windows 11 家庭版 |
+| 2 | Windows 11 Home Single Language / Windows 11 家庭中文版 |
+| 3 | Windows 11 Education / Windows 11 教育版 |
+| 4 | Windows 11 Pro / Windows 11 专业版 |
+| 5 | Windows 11 Pro Education / Windows 11 专业教育版 |
+| 6 | Windows 11 Pro for Workstations / Windows 11 协同版 |
+| 7 | Windows 11 Pro N / Windows 11 专业版 N |
+
+选择完版本后，在 **Conversion options** 页面：
+- **Download and convert to ISO** — 选择此选项
+- **Include updates** — 推荐开启
+- **.NET Framework 3.5** — 见下方 `.NET 3.5` 说明
+
+然后下载生成的 ZIP 文件。
 
 ### 第三步：上传到 Filebin
 
 1. 打开 [Filebin](https://filebin.net/)
-2. 把你的 UUPDump ZIP 文件拖进去
+2. 把刚才下载的 UUPDump ZIP 文件拖进去
 3. 上传完成后，浏览器地址栏会显示类似 `https://filebin.net/0uv3y9tjqm0hjb51` 的链接
 4. 记下最后这段 **code**（例如 `0uv3y9tjqm0hjb51`）
 
@@ -52,7 +81,7 @@
 |---|---|---|
 | `filebin_code` | Filebin 的 code | `0uv3y9tjqm0hjb51` |
 | `tiny11_variant` | 精简模式 | `standard` / `core` / `nano` |
-| `image_index` | 镜像索引 | `1`=Home, `4`=Education, `6`=Pro |
+| `image_index` | **单版本 UUPDump 填 1** | `1`（默认） |
 | `enable_dotnet35` | 启用 .NET 3.5（仅 Core 变体） | 默认 `false` |
 | `skip_cleanup` | 保留临时文件（调试用） | 默认 `false` |
 
@@ -67,6 +96,30 @@
 | **Standard** | `tiny11maker-headless.ps1` | ~3-4 GB | 保留 Windows Update，适合日常使用 |
 | **Core** | `tiny11coremaker-headless.ps1` | ~2 GB | WinSxS 极致精简，不可更新，适合 VM/测试 |
 | **Nano** | `nano11builder-headless.ps1` | ~1.5 GB | 最激进精简（驱动/字体/服务），仅限 VM |
+
+## .NET Framework 3.5 说明
+
+**UUPDump 中的 ".NET Framework 3.5" 选项** 和 **tiny11 `enable_dotnet35` 参数** 之间的关系：
+
+| 方式 | 作用阶段 | 原理 |
+|---|---|---|
+| UUPDump 选项（在生成 ZIP 时勾选） | ISO 构建前 | 将 .NET 3.5 源文件（`sxs` 文件夹）打包到生成的 ISO 中 |
+| tiny11 `enable_dotnet35=true` | 精简阶段 | 在精简过程中通过 DISM 安装 .NET 3.5 |
+
+**两者不会冲突**，但最佳做法是：
+
+1. **在 UUPDump 中勾选 ".NET 3.5"** — 这样 ISO 中包含 .NET 3.5 源文件，tiny11 脚本才能安装它（需要 `sxs` 源）
+2. **在工作流中设置 `enable_dotnet35=true`** — 让 tiny11 在精简时实际安装 .NET 3.5
+
+> 如果 UUPDump 中没有勾选 .NET 3.5，但工作流中设置了 `enable_dotnet35=true`，tiny11 脚本会尝试从 ISO 的 `sources/sxs` 目录安装。如果源文件缺失，安装会跳过并记录一个警告，不影响系统使用。
+
+## 自动检测说明
+
+脚本现在包含**自动 Index 检测**功能，处理以下情况：
+
+1. **中文版名**：`Windows 11 专业版`、`Windows 11 家庭版` 等中文版名会被正确识别
+2. **Index 不匹配**：如果你填了 Index 6，但 ISO 中只有 Index 1（专业版），脚本会自动修正为 Index 1
+3. **完全未知的版名**：兜底使用 Index 1（这也是为什么建议单版本 UUPDump 始终填 1）
 
 ## 文件结构
 
@@ -89,11 +142,11 @@
 
 ## 注意事项
 
-1. **管理员密码** `123456` — 请在生产环境前自行修改
+1. **管理员密码** `123456` — 请在生产环境前自行修改（修改 `autounattend.xml` 中的密码）
 2. **Core 和 Nano** 变体移除了 Windows Update 功能，不可安装后续更新
 3. 构建耗时约 **60–120 分钟**（取决于 UUPDump 下载速度和 tiny11 精简复杂度）
 4. 需要 GitHub Actions 的 Windows runner，免费额度足够使用
-5. 所有 PS1 脚本来自 [tiny11-automated](https://github.com/kelexine/tiny11-automated)，未经修改
+5. 所有 PS1 脚本来自 [tiny11-automated](https://github.com/kelexine/tiny11-automated)，仅修改了 `Resolve-ImageIndex` 函数以支持中英文版名
 
 ## Credits
 

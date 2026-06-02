@@ -212,29 +212,34 @@ function Resolve-ImageIndex {
     
     $images = Get-WindowsImage -ImagePath $sourceImagePath
     
-    # Standard Microsoft index mapping for Consumer ISOs
+    # Edition name mappings in multiple languages.
+    # UUPDump single-edition ISOs always place the selected edition at Index 1.
+    # Multi-language Microsoft ISOs use the standard index layout below.
+    # 多语言版名映射表。UUPDump 单版本 ISO 的 Index 总是 1。
     $expectedNames = @{
-        1 = "Windows 11 Home"
-        4 = "Windows 11 Education"
-        6 = "Windows 11 Pro"
-        7 = "Windows 11 Pro N"
+        1 = @("Windows 11 Home", "Windows 11 家庭版", "Windows 11 Home Single Language", "Windows 11 家庭中文版", "Windows 11 Home China")
+        4 = @("Windows 11 Education", "Windows 11 教育版")
+        6 = @("Windows 11 Pro", "Windows 11 专业版")
+        7 = @("Windows 11 Pro N", "Windows 11 专业版 N")
     }
     
-    $targetName = $expectedNames[$INDEX]
+    # Try multi-language name lookup for the requested index
+    # 尝试用多语言版名查找用户指定的 Index
+    $targetNames = $expectedNames[$INDEX]
     
-    if ($targetName) {
-        $foundImage = $images | Where-Object { $_.ImageName -eq $targetName }
+    if ($targetNames) {
+        $foundImage = $images | Where-Object { $_.ImageName -in $targetNames }
         if ($foundImage) {
             $actualIndex = $foundImage.ImageIndex
             if ($actualIndex -ne $INDEX) {
-                Write-Log "Index shifted! Expected '$targetName' at $INDEX, but found at $actualIndex." "WARN"
+                Write-Log "Index shifted! Expected one of [$($targetNames -join ', ')] at $INDEX, but found at $actualIndex." "WARN"
                 Write-Log "Automatically adjusting INDEX to $actualIndex."
                 $script:INDEX = $actualIndex
             } else {
-                Write-Log "Edition '$targetName' matched expected index $INDEX."
+                Write-Log "Edition pattern matched expected index $INDEX."
             }
         } else {
-            Write-Log "Expected edition '$targetName' not found in ISO. Proceeding with literal index $INDEX." "WARN"
+            Write-Log "Expected edition for index $INDEX not found in ISO. Proceeding with literal index $INDEX." "WARN"
         }
     } else {
         Write-Log "No standard mapping for index $INDEX. Proceeding with literal index."
@@ -242,10 +247,29 @@ function Resolve-ImageIndex {
     
     $validIndices = $images.ImageIndex
     
+    # Fallback: if literal index is out of range, try to find ANY known edition
+    # 兜底策略：如果字面 Index 不存在，在所有可用 Index 中搜索已知版名
     if ($script:INDEX -notin $validIndices) {
-        Write-Log "Invalid index $script:INDEX. Available indices:" "ERROR"
-        $images | ForEach-Object { Write-Log "  Index $($_.ImageIndex): $($_.ImageName)" }
-        throw "Image index $script:INDEX not found"
+        Write-Log "Literal index $script:INDEX not found in ISO. Trying to auto-detect by edition name..." "WARN"
+        
+        $allKnownNames = @()
+        $expectedNames.Values | ForEach-Object { $allKnownNames += $_ }
+        $matched = $images | Where-Object { $_.ImageName -in $allKnownNames } | Select-Object -First 1
+        
+        if ($matched) {
+            Write-Log "Auto-detected: '$($matched.ImageName)' at Index $($matched.ImageIndex). Adjusting INDEX." "WARN"
+            $script:INDEX = $matched.ImageIndex
+        } else {
+            Write-Log "Unknown edition name. Falling back to Index 1 (single-edition UUPDump ISO)." "WARN"
+            if (1 -in $validIndices) {
+                $script:INDEX = 1
+                Write-Log "Auto-adjusted to Index 1." "WARN"
+            } else {
+                Write-Log "Invalid index $script:INDEX. Available indices:" "ERROR"
+                $images | ForEach-Object { Write-Log "  Index $($_.ImageIndex): $($_.ImageName)" }
+                throw "Image index not found in ISO"
+            }
+        }
     }
     
     $selectedImage = $images | Where-Object { $_.ImageIndex -eq $script:INDEX }
