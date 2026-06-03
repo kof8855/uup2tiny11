@@ -212,15 +212,14 @@ function Resolve-ImageIndex {
     
     $images = Get-WindowsImage -ImagePath $sourceImagePath
     
-    # Edition name mappings in multiple languages.
+    # Edition name lookup (English only).
     # UUPDump single-edition ISOs always place the selected edition at Index 1.
     # Multi-language Microsoft ISOs use the standard index layout below.
-    # 多语言版名映射表。UUPDump 单版本 ISO 的 Index 总是 1。
     $expectedNames = @{
-        1 = @("Windows 11 Home", "Windows 11 家庭版", "Windows 11 Home Single Language", "Windows 11 家庭中文版", "Windows 11 Home China")
-        4 = @("Windows 11 Education", "Windows 11 教育版")
-        6 = @("Windows 11 Pro", "Windows 11 专业版")
-        7 = @("Windows 11 Pro N", "Windows 11 专业版 N")
+        1 = @("Windows 11 Home", "Windows 11 Home Single Language", "Windows 11 Home China")
+        4 = @("Windows 11 Education")
+        6 = @("Windows 11 Pro")
+        7 = @("Windows 11 Pro N")
     }
     
     # Try multi-language name lookup for the requested index
