@@ -1,60 +1,69 @@
 <?xml version="1.0" encoding="utf-8"?>
-<unattend xmlns="urn:schemas-microsoft-com:unattend">
+<unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
 
     <!-- ============================================================
-         windowsPE phase — disk operations, image selection
+         windowsPE — 磁盘操作、镜像选择、TPM/CPU 绕过
          ============================================================ -->
     <settings pass="windowsPE">
-        <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
-                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                   name="Microsoft-Windows-Setup"
+        <component name="Microsoft-Windows-Setup"
                    processorArchitecture="amd64"
                    publicKeyToken="31bf3856ad364e35"
                    language="neutral"
                    versionScope="nonSxS">
-            <DynamicUpdate>
-                <WillShowUI>OnError</WillShowUI>
-            </DynamicUpdate>
-            <ImageInstall>
-                <OSImage>
-                    <Compact>true</Compact>
-                    <WillShowUI>OnError</WillShowUI>
-                    <InstallFrom>
-                        <MetaData wcm:action="add">
-                            <Key>/IMAGE/INDEX</Key>
-                            <Value>1</Value>
-                        </MetaData>
-                    </InstallFrom>
-                </OSImage>
-            </ImageInstall>
             <UserData>
-                <AcceptEula>true</AcceptEula>
                 <ProductKey>
                     <Key></Key>
                 </ProductKey>
+                <AcceptEula>true</AcceptEula>
             </UserData>
+            <RunSynchronous>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>1</Order>
+                    <Description>Bypass TPM check</Description>
+                    <Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>2</Order>
+                    <Description>Bypass SecureBoot check</Description>
+                    <Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>3</Order>
+                    <Description>Bypass CPU check</Description>
+                    <Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>4</Order>
+                    <Description>Bypass RAM check</Description>
+                    <Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>5</Order>
+                    <Description>Bypass Storage check</Description>
+                    <Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>6</Order>
+                    <Description>Bypass Disk check</Description>
+                    <Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassDiskCheck /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+            </RunSynchronous>
         </component>
     </settings>
 
     <!-- ============================================================
-         specialize phase — computer name, timezone, enable Admin
+         specialize — 计算机名、时区、启用 Administrator 并设置密码
          ============================================================ -->
     <settings pass="specialize">
-        <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
-                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                   name="Microsoft-Windows-Shell-Setup"
+        <component name="Microsoft-Windows-Shell-Setup"
                    processorArchitecture="amd64"
                    publicKeyToken="31bf3856ad364e35"
                    language="neutral"
                    versionScope="nonSxS">
             <ComputerName>*</ComputerName>
             <TimeZone>China Standard Time</TimeZone>
-            <RegisteredOrganization></RegisteredOrganization>
-            <RegisteredOwner></RegisteredOwner>
         </component>
-        <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
-                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                   name="Microsoft-Windows-Deployment"
+        <component name="Microsoft-Windows-Deployment"
                    processorArchitecture="amd64"
                    publicKeyToken="31bf3856ad364e35"
                    language="neutral"
@@ -62,25 +71,23 @@
             <RunSynchronous>
                 <RunSynchronousCommand wcm:action="add">
                     <Order>1</Order>
+                    <Description>Enable built-in Administrator</Description>
                     <Path>net user Administrator /active:yes</Path>
-                    <Description>Enable Administrator account</Description>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Order>2</Order>
-                    <Path>net user Administrator 123456</Path>
                     <Description>Set Administrator password</Description>
+                    <Path>net user Administrator 123456</Path>
                 </RunSynchronousCommand>
             </RunSynchronous>
         </component>
     </settings>
 
     <!-- ============================================================
-         oobeSystem phase — auto-logon, skip OOBE
+         oobeSystem — 跳过 OOBE、自动登录 Administrator、BypassNRO
          ============================================================ -->
     <settings pass="oobeSystem">
-        <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
-                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                   name="Microsoft-Windows-Shell-Setup"
+        <component name="Microsoft-Windows-Shell-Setup"
                    processorArchitecture="amd64"
                    publicKeyToken="31bf3856ad364e35"
                    language="neutral"
@@ -98,13 +105,14 @@
                 <HideEULAPage>true</HideEULAPage>
                 <HideLocalAccountScreen>true</HideLocalAccountScreen>
                 <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
-                <SkipMachineOOBE>true</SkipMachineOOBE>
-                <SkipUserOOBE>true</SkipUserOOBE>
+                <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+                <NetworkLocation>Work</NetworkLocation>
+                <ProtectYourPC>1</ProtectYourPC>
             </OOBE>
             <FirstLogonCommands>
                 <SynchronousCommand wcm:action="add">
                     <Order>1</Order>
-                    <CommandLine>powershell -Command "Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'StopWUPostOOBE1' -ErrorAction SilentlyContinue; Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'StopWUPostOOBE2' -ErrorAction SilentlyContinue; Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'StopWUPostOOBE3' -ErrorAction SilentlyContinue"</CommandLine>
+                    <CommandLine>powershell.exe -NoProfile -WindowStyle Hidden -Command "Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'StopWUPostOOBE1' -ErrorAction SilentlyContinue; Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'StopWUPostOOBE2' -ErrorAction SilentlyContinue; Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'StopWUPostOOBE3' -ErrorAction SilentlyContinue"</CommandLine>
                     <Description>Clean up RunOnce entries</Description>
                 </SynchronousCommand>
             </FirstLogonCommands>
