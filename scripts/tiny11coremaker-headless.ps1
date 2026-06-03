@@ -648,6 +648,23 @@ function Set-RegistryValue {
     }
 }
 
+function Remove-RegistryValue {
+    param (
+        [string]$path,
+        [string]$name
+    )
+    try {
+        if ($name) {
+            & 'reg' 'delete' $path '/v' $name '/f' 2>$null | Out-Null
+        } else {
+            & 'reg' 'delete' $path '/ve' '/f' 2>$null | Out-Null
+        }
+        Write-Log "Removed registry: $path\$name"
+    } catch {
+        Write-Log "Error removing registry $path\$name : $_" "ERROR"
+    }
+}
+
 function Apply-RegistryTweaks {
     Write-Log "Applying registry tweaks..."
 
