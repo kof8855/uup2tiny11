@@ -2,9 +2,7 @@
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
 
     <!-- ============================================================
-         Windows PE phase (windowsPE)
-         Disk/partition operations, image selection, product key
-         Windows PE 阶段：磁盘操作、镜像选择、产品密钥
+         windowsPE phase — disk operations, image selection
          ============================================================ -->
     <settings pass="windowsPE">
         <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
@@ -14,34 +12,14 @@
                    publicKeyToken="31bf3856ad364e35"
                    language="neutral"
                    versionScope="nonSxS">
-            <!--
-              Disable Windows Update during setup for faster install
-              禁用安装过程中的 Windows Update 以加快安装速度
-            -->
             <DynamicUpdate>
                 <WillShowUI>OnError</WillShowUI>
-                <Disable>true</Disable>
             </DynamicUpdate>
             <ImageInstall>
                 <OSImage>
-                    <!--
-                      Compact install — saves ~2GB disk space at slight performance cost
-                      压缩安装 — 节省约 2GB 磁盘空间，轻微性能代价
-                    -->
                     <Compact>true</Compact>
                     <WillShowUI>OnError</WillShowUI>
                     <InstallFrom>
-                        <!--
-                          NOTE: The <Value> here is a placeholder.
-                          The tiny11 headless script extracts the actual image
-                          from the ISO and processes it — this Answer File is
-                          copied to the ISO root and Sysprep folder later.
-                          In a single-edition UUPDump ISO, the selected edition
-                          is always at Index 1, regardless of its name.
-                          注意：这里的 <Value> 是占位符。
-                          tiny11 脚本会实际从 ISO 提取镜像进行处理。
-                          如果是 UUPDump 单版本 ISO，所选版本始终在 Index 1。
-                        -->
                         <MetaData wcm:action="add">
                             <Key>/IMAGE/INDEX</Key>
                             <Value>1</Value>
@@ -49,16 +27,9 @@
                     </InstallFrom>
                 </OSImage>
             </ImageInstall>
-            <!--
-              Accept EULA automatically / 自动接受 EULA
-            -->
             <UserData>
                 <AcceptEula>true</AcceptEula>
                 <ProductKey>
-                    <!--
-                      Leave empty — generic Windows 11 key auto-detects edition
-                      留空 — Windows 11 通用密钥会自动检测版本
-                    -->
                     <Key></Key>
                 </ProductKey>
             </UserData>
@@ -66,9 +37,7 @@
     </settings>
 
     <!-- ============================================================
-         Specialize phase (specialize)
-         Computer name, timezone, first-run commands
-         专用化阶段：计算机名、时区、首次运行命令
+         specialize phase — computer name, timezone, enable Admin
          ============================================================ -->
     <settings pass="specialize">
         <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
@@ -78,24 +47,10 @@
                    publicKeyToken="31bf3856ad364e35"
                    language="neutral"
                    versionScope="nonSxS">
-            <!--
-              Auto-generate computer name / 自动生成计算机名
-            -->
             <ComputerName>*</ComputerName>
+            <TimeZone>China Standard Time</TimeZone>
             <RegisteredOrganization></RegisteredOrganization>
             <RegisteredOwner></RegisteredOwner>
-            <!--
-              Timezone set to China Standard Time (UTC+8)
-              Modify this line if you need a different timezone
-              时区设置为中国标准时间 (UTC+8)
-              如需其他时区，请修改此行
-              Other common values: / 其他常见值:
-                "Pacific Standard Time"
-                "Eastern Standard Time"
-                "Tokyo Standard Time"
-                "W. Europe Standard Time"
-            -->
-            <TimeZone>China Standard Time</TimeZone>
         </component>
         <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -105,23 +60,22 @@
                    language="neutral"
                    versionScope="nonSxS">
             <RunSynchronous>
-                <!--
-                  Enable the built-in Administrator account
-                  启用内置 Administrator 账号
-                -->
                 <RunSynchronousCommand wcm:action="add">
                     <Order>1</Order>
                     <Path>net user Administrator /active:yes</Path>
-                    <Description>Enable Administrator account / 启用 Administrator 账号</Description>
+                    <Description>Enable Administrator account</Description>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>2</Order>
+                    <Path>net user Administrator 123456</Path>
+                    <Description>Set Administrator password</Description>
                 </RunSynchronousCommand>
             </RunSynchronous>
         </component>
     </settings>
 
     <!-- ============================================================
-         OOBE phase (oobeSystem)
-         Auto-logon, password, skip OOBE wizard
-         OOBE 阶段：自动登录、密码、跳过 OOBE 向导
+         oobeSystem phase — auto-logon, skip OOBE
          ============================================================ -->
     <settings pass="oobeSystem">
         <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
@@ -131,114 +85,30 @@
                    publicKeyToken="31bf3856ad364e35"
                    language="neutral"
                    versionScope="nonSxS">
-
-            <!--
-              ========================================================
-              Administrator Auto-Logon / Administrator 自动登录
-              ========================================================
-              The system will log in as Administrator automatically
-              after each boot, with up to 999 auto-login attempts.
-              系统每次启动后自动以 Administrator 身份登录，
-              最多自动登录 999 次。
-              ========================================================
-            -->
             <AutoLogon>
                 <Password>
-                    <!--
-                      WARNING: Change this password before deploying
-                      to any production or public-facing environment!
-                      警告：在生产或公网环境部署前，请修改此密码！
-                    -->
                     <Value>123456</Value>
-                    <!--
-                      PlainText=true means the password is stored as-is (not encrypted).
-                      This is fine for an offline/VM-only Answer File.
-                      PlainText=true 表示密码明文存储，
-                      适用于离线/仅 VM 使用的应答文件。
-                    -->
                     <PlainText>true</PlainText>
                 </Password>
                 <Enabled>true</Enabled>
                 <LogonCount>999</LogonCount>
                 <Username>Administrator</Username>
             </AutoLogon>
-
-            <!--
-              ========================================================
-              Administrator Password / Administrator 密码设置
-              ========================================================
-              Sets the Administrator account password.
-              This must match the AutoLogon password above.
-              设置 Administrator 账号密码。
-              必须与上面 AutoLogon 中的密码一致。
-              ========================================================
-            -->
-            <UserAccounts>
-                <AdministratorPassword>
-                    <Value>123456</Value>
-                    <PlainText>true</PlainText>
-                </AdministratorPassword>
-            </UserAccounts>
-
-            <!--
-              ========================================================
-              OOBE Skip Settings / OOBE 跳过设置
-              ========================================================
-              All these settings skip the out-of-box experience wizard,
-              booting directly to the desktop.
-              以下设置全部跳过 OOBE 向导，直接进入桌面。
-              ========================================================
-            -->
             <OOBE>
-                <!-- Skip EULA page / 跳过 EULA 页面 -->
                 <HideEULAPage>true</HideEULAPage>
-                <!--
-                  Skip local account creation screen.
-                  Administrator is already enabled above.
-                  跳过创建本地账号界面（Administrator 已启用）
-                -->
                 <HideLocalAccountScreen>true</HideLocalAccountScreen>
-                <!--
-                  Skip Microsoft account login — forces local account
-                  跳过微软账号登录，强制使用本地账号
-                -->
                 <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
-                <!-- Skip wireless setup during OOBE / 跳过 OOBE 无线设置 -->
-                <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
-                <!-- Network location type: Home / 网络位置：家庭 -->
-                <NetworkLocation>Home</NetworkLocation>
-                <!--
-                  Protection level: 1=recommended settings, 2=all settings
-                  保护级别：1=推荐设置，2=全部设置
-                -->
-                <ProtectYourPC>1</ProtectYourPC>
-                <!-- Skip full machine OOBE flow / 跳过完整机器 OOBE 流程 -->
                 <SkipMachineOOBE>true</SkipMachineOOBE>
-                <!-- Skip user OOBE flow / 跳过用户 OOBE 流程 -->
                 <SkipUserOOBE>true</SkipUserOOBE>
             </OOBE>
-        </component>
-
-        <!--
-          First-logon commands / 首次登录命令
-          Clean up the Windows Update disable RunOnce entries
-          left by the tiny11 Core script (for cleanliness).
-          清理 tiny11 Core 脚本留下的 Windows Update 禁用 RunOnce 条目。
-        -->
-        <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
-                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                   name="Microsoft-Windows-Shell-Setup"
-                   processorArchitecture="amd64"
-                   publicKeyToken="31bf3856ad364e35"
-                   language="neutral"
-                   versionScope="nonSxS">
             <FirstLogonCommands>
                 <SynchronousCommand wcm:action="add">
                     <Order>1</Order>
                     <CommandLine>powershell -Command "Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'StopWUPostOOBE1' -ErrorAction SilentlyContinue; Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'StopWUPostOOBE2' -ErrorAction SilentlyContinue; Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'StopWUPostOOBE3' -ErrorAction SilentlyContinue"</CommandLine>
-                    <Description>Clean up RunOnce entries / 清理 RunOnce 条目</Description>
+                    <Description>Clean up RunOnce entries</Description>
                 </SynchronousCommand>
             </FirstLogonCommands>
         </component>
     </settings>
+
 </unattend>
