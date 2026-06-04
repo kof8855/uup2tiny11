@@ -1,121 +1,106 @@
 <?xml version="1.0" encoding="utf-8"?>
-<unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
 
-    <!-- ============================================================
-         windowsPE — 磁盘操作、镜像选择、TPM/CPU 绕过
-         ============================================================ -->
+    <!-- ================================================================
+         windowsPE 阶段 — 安装程序启动环境
+         配置来源: tiny11-automated (kelexine)
+         新增: DynamicUpdate 静默处理、Compact 压缩安装、Index 指定
+         ================================================================ -->
     <settings pass="windowsPE">
-        <component name="Microsoft-Windows-Setup"
-                   processorArchitecture="amd64"
-                   publicKeyToken="31bf3856ad364e35"
-                   language="neutral"
-                   versionScope="nonSxS">
+        <component
+            xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            name="Microsoft-Windows-Setup"
+            processorArchitecture="amd64"
+            publicKeyToken="31bf3856ad364e35"
+            language="neutral"
+            versionScope="nonSxS">
+            <DynamicUpdate>
+                <!-- 安装更新仅在出错时显示界面，否则静默处理 -->
+                <WillShowUI>OnError</WillShowUI>
+            </DynamicUpdate>
+            <ImageInstall>
+                <OSImage>
+                    <!-- 启用 NTFS 压缩安装，可减少约 30% 磁盘占用 -->
+                    <Compact>true</Compact>
+                    <WillShowUI>OnError</WillShowUI>
+                    <InstallFrom>
+                        <MetaData wcm:action="add">
+                            <Key>/IMAGE/INDEX</Key>
+                            <Value>1</Value>
+                        </MetaData>
+                    </InstallFrom>
+                </OSImage>
+            </ImageInstall>
             <UserData>
+                <!-- ProductKey 留空 = 自动检测并匹配 ISO 中的版本 -->
                 <ProductKey>
                     <Key></Key>
                 </ProductKey>
-                <AcceptEula>true</AcceptEula>
             </UserData>
-            <RunSynchronous>
-                <RunSynchronousCommand wcm:action="add">
-                    <Order>1</Order>
-                    <Description>Bypass TPM check</Description>
-                    <Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f</Path>
-                </RunSynchronousCommand>
-                <RunSynchronousCommand wcm:action="add">
-                    <Order>2</Order>
-                    <Description>Bypass SecureBoot check</Description>
-                    <Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f</Path>
-                </RunSynchronousCommand>
-                <RunSynchronousCommand wcm:action="add">
-                    <Order>3</Order>
-                    <Description>Bypass CPU check</Description>
-                    <Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f</Path>
-                </RunSynchronousCommand>
-                <RunSynchronousCommand wcm:action="add">
-                    <Order>4</Order>
-                    <Description>Bypass RAM check</Description>
-                    <Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f</Path>
-                </RunSynchronousCommand>
-                <RunSynchronousCommand wcm:action="add">
-                    <Order>5</Order>
-                    <Description>Bypass Storage check</Description>
-                    <Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f</Path>
-                </RunSynchronousCommand>
-                <RunSynchronousCommand wcm:action="add">
-                    <Order>6</Order>
-                    <Description>Bypass Disk check</Description>
-                    <Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassDiskCheck /t REG_DWORD /d 1 /f</Path>
-                </RunSynchronousCommand>
-            </RunSynchronous>
         </component>
     </settings>
 
-    <!-- ============================================================
-         specialize — 计算机名、时区、启用 Administrator 并设置密码
-         ============================================================ -->
+    <!-- ================================================================
+         specialize 阶段 — 系统专用化配置
+         在安装过程中、OOBE 之前执行
+         启用内置 Administrator 账号（无密码、不自动登录）
+         ================================================================ -->
     <settings pass="specialize">
-        <component name="Microsoft-Windows-Shell-Setup"
-                   processorArchitecture="amd64"
-                   publicKeyToken="31bf3856ad364e35"
-                   language="neutral"
-                   versionScope="nonSxS">
-            <ComputerName>*</ComputerName>
-            <TimeZone>China Standard Time</TimeZone>
-        </component>
-        <component name="Microsoft-Windows-Deployment"
-                   processorArchitecture="amd64"
-                   publicKeyToken="31bf3856ad364e35"
-                   language="neutral"
-                   versionScope="nonSxS">
+        <component
+            xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            name="Microsoft-Windows-Deployment"
+            processorArchitecture="amd64"
+            publicKeyToken="31bf3856ad364e35"
+            language="neutral"
+            versionScope="nonSxS">
             <RunSynchronous>
                 <RunSynchronousCommand wcm:action="add">
                     <Order>1</Order>
-                    <Description>Enable built-in Administrator</Description>
-                    <Path>net user Administrator /active:yes</Path>
-                </RunSynchronousCommand>
-                <RunSynchronousCommand wcm:action="add">
-                    <Order>2</Order>
-                    <Description>Set Administrator password</Description>
-                    <Path>net user Administrator 123456</Path>
+                    <Description>启用内置 Administrator 账号（无密码）</Description>
+                    <Path>cmd /c net user Administrator /active:yes</Path>
                 </RunSynchronousCommand>
             </RunSynchronous>
         </component>
+        <!-- 不设置 ComputerName → 自动随机生成 -->
+        <!-- 不设置 TimeZone → 保持默认 UTC -->
     </settings>
 
-    <!-- ============================================================
-         oobeSystem — 跳过 OOBE、自动登录 Administrator、BypassNRO
-         ============================================================ -->
+    <!-- ================================================================
+         oobeSystem 阶段 — 首次引导 (OOBE)
+         - 不创建任何自定义用户
+         - 跳过微软账号登录页（强制本地账号）
+         - 不设置 AutoLogon
+         ================================================================ -->
     <settings pass="oobeSystem">
-        <component name="Microsoft-Windows-Shell-Setup"
-                   processorArchitecture="amd64"
-                   publicKeyToken="31bf3856ad364e35"
-                   language="neutral"
-                   versionScope="nonSxS">
-            <AutoLogon>
-                <Password>
-                    <Value>123456</Value>
-                    <PlainText>true</PlainText>
-                </Password>
-                <Enabled>true</Enabled>
-                <LogonCount>999</LogonCount>
-                <Username>Administrator</Username>
-            </AutoLogon>
+        <component
+            xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            name="Microsoft-Windows-Shell-Setup"
+            processorArchitecture="amd64"
+            publicKeyToken="31bf3856ad364e35"
+            language="neutral"
+            versionScope="nonSxS">
             <OOBE>
-                <HideEULAPage>true</HideEULAPage>
-                <HideLocalAccountScreen>true</HideLocalAccountScreen>
+                <!-- 跳过微软账号登录页，强制本地账号模式 -->
                 <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
-                <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
-                <NetworkLocation>Work</NetworkLocation>
-                <ProtectYourPC>1</ProtectYourPC>
+                <!-- 跳过 EULA 协议页面 -->
+                <HideEULAPage>true</HideEULAPage>
             </OOBE>
-            <FirstLogonCommands>
-                <SynchronousCommand wcm:action="add">
-                    <Order>1</Order>
-                    <CommandLine>powershell.exe -NoProfile -WindowStyle Hidden -Command "Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'StopWUPostOOBE1' -ErrorAction SilentlyContinue; Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'StopWUPostOOBE2' -ErrorAction SilentlyContinue; Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'StopWUPostOOBE3' -ErrorAction SilentlyContinue"</CommandLine>
-                    <Description>Clean up RunOnce entries</Description>
-                </SynchronousCommand>
-            </FirstLogonCommands>
+            <!-- 不创建 UserAccounts、不设置 AutoLogon、不设 AdministratorPassword -->
+            <!-- 首次启动会显示登录页，管理员账号已激活（无密码，点击即登录） -->
+        </component>
+        <!-- 禁用 Chat/Teams 自动安装（来自 tiny11-automated 原始配置） -->
+        <component
+            xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            name="Microsoft-Windows-Shell-Setup"
+            processorArchitecture="amd64"
+            publicKeyToken="31bf3856ad364e35"
+            language="neutral"
+            versionScope="nonSxS">
+            <ConfigureChatAutoInstall>false</ConfigureChatAutoInstall>
         </component>
     </settings>
 
